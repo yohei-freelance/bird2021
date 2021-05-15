@@ -1,6 +1,9 @@
 # local package
 -e .
 
+torch
+torchvision
+
 # external requirements
 click
 Sphinx
