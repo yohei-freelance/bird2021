@@ -4,10 +4,9 @@ from pathlib import Path
 import torch
 import numpy as np
 import soundfile as sf
-import librosa
 import cv2
 
-BASE_DIR = Path('/Users/yohei/Documents/bird2021/solution4birdcall2021')
+BASE_DIR = Path('/home/yohei.nomoto/bird2021/solution4birdcall2021')
 SMALLDATA_DIR = BASE_DIR / 'data' / 'small'
 TRAINDATA_DIR = SMALLDATA_DIR / 'train_short_audio'
 LOG_DIR = BASE_DIR / 'reports' / 'logs'

@@ -13,7 +13,7 @@ from loss import BCEFocal2WayLoss
 
 warnings.simplefilter('ignore')
 
-train_meta_path = 'data/small/train_metadata.csv'
+train_meta_path = '/home/yohei.nomoto/bird2021/solution4birdcall2021/data/small/train_metadata.csv'
 train_meta = pd.read_csv(train_meta_path)
 
 # define just 2 species
@@ -39,7 +39,9 @@ class LitBirdcall2021(LightningModule):
         # TimmSED
         # input: [batch_size, time]
         # output: {framewise_output, segmentwise_output, logit, framewise_logit, clipwise_output}
-        self.model = TimmSED(base_model_name='tf_efficientnet_b0_ns', pretrained=True, num_classes=397, in_channels=1)
+        # 一時的にmodelのoutputのclassを2にする!
+        self.model = TimmSED(base_model_name='tf_efficientnet_b0_ns', pretrained=True, num_classes=2, in_channels=1)
+        self.loss_func = BCEFocal2WayLoss()
 
         self.trainset = SpectrogramDataset(file_list=train_file_list)
         self.valset = SpectrogramDataset(file_list=valid_file_list)
@@ -57,7 +59,7 @@ class LitBirdcall2021(LightningModule):
         return val_dl
     
     def loss_function(self, preds, labels):
-        loss = BCEFocal2WayLoss(preds, labels)
+        loss = self.loss_func(preds, labels)
         return loss
 
     def configure_optimizers(self):
@@ -68,7 +70,8 @@ class LitBirdcall2021(LightningModule):
     def training_step(self, batch, batch_idx):
         signal, targets = batch
         preds = self.model(signal)
-        loss = self.loss_function(preds, signal)
+        loss = self.loss_function(preds, targets)
+        print('trainloss: {}'.format(loss))
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -77,15 +80,13 @@ class LitBirdcall2021(LightningModule):
         return {'output': preds, 'y': targets}
 
     def validation_epoch_end(self, outputs):
-        outputs_, y_ = [], []
+        loss = 0.
         for output in outputs:
-            outputs_.append(output['output'])
-            y_.append(output['y'])
-        outputs_ = torch.cat(outputs_)
-        y_ = torch.cat(y_)
-        loss = self.loss_function(outputs_, y_)
+            batch_loss = self.loss_function(output['output'], output['y'])
+            loss += batch_loss.item()
+        return loss
 
 if __name__ == '__main__':
     model = LitBirdcall2021()
-    trainer = Trainer(max_epochs=1)
+    trainer = Trainer(gpus=1, max_epochs=1)
     trainer.fit(model)
