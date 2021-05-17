@@ -1,11 +1,12 @@
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import f1_score, average_precision_score
 import warnings
 
 import torch
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.core.lightning import LightningModule
 from dataset import SpectrogramDataset
 from model import TimmSED
@@ -71,7 +72,13 @@ class LitBirdcall2021(LightningModule):
         signal, targets = batch
         preds = self.model(signal)
         loss = self.loss_function(preds, targets)
-        print('trainloss: {}'.format(loss))
+        outputs_, y_ = preds['clipwise_output'].numpy(), targets.numpy()
+        F1score = f1score(outputs_, y_)
+        mAPscore = average_precision_score(outputs_, y_)
+        mAPscore = np.nan_to_num(mAPscore).mean()
+        self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_f1_step', F1score, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_mAP_step', mAPscore, on_epoch=True, prog_bar=True, logger=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -80,13 +87,26 @@ class LitBirdcall2021(LightningModule):
         return {'output': preds, 'y': targets}
 
     def validation_epoch_end(self, outputs):
-        loss = 0.
+        outputs_, y_ = [], []
         for output in outputs:
-            batch_loss = self.loss_function(output['output'], output['y'])
-            loss += batch_loss.item()
+            outputs_.append(output['output'])
+            y_.append(output['y'])
+        outputs_ = torch.cat(outputs_)
+        y_ = torch.cat(y_)
+        loss = self.loss_function(outputs_, y_)
+        outputs_, y_ = outputs_['clipwise_output'].numpy(), y_.numpy()
+        F1score = f1score(outputs_, y_)
+        mAPscore = average_precision_score(outputs_, y_)
+        mAPscore = np.nan_to_num(mAPscore).mean()
+        self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_f1', F1score, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_mAP', mAPscore, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
 if __name__ == '__main__':
+    seed_everything(42, workers=True)
     model = LitBirdcall2021()
-    trainer = Trainer(gpus=1, max_epochs=1)
+    checkpoint_cb = ModelCheckpoint(dirpath='./reports/', filename=f'epoch-{epoch}--val_loss-{val_loss}--val_f1-{val_f1}', save_weights_only=True, monitor="val_loss", mode="min", save_last=True)
+    earlystop_cb = EarlyStopping(monitor="val_loss", mode="min")
+    trainer = Trainer(gpus=1, max_epochs=1, deterministic=True, callbacks=[checkpoint_cb, earlystop_cb])
     trainer.fit(model)
