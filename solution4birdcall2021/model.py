@@ -195,7 +195,7 @@ class TimmSEDfromImage(nn.Module):
 class TimmSEDfromSound(TimmSEDfromImage):
     # base_model_name: you can select arbitary model from https://github.com/rwightman/pytorch-image-models/tree/master/timm/models
 
-    def __init__(self, base_model_name: str, pretrained=False, num_classes: int, in_channels=1):
+    def __init__(self, base_model_name: str, num_classes: int, pretrained=False, in_channels=1):
         super().__init__(base_model_name=base_model_name, pretrained=pretrained, num_classes=num_classes, in_channels=in_channels)
 
         # spectrogram extractor
