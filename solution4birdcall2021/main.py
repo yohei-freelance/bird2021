@@ -86,17 +86,17 @@ class LitBirdcall2021(LightningModule):
         preds = self.model(signal)
         return {'output': preds, 'y': targets}
 
+    # まず, f1やmAPの計算方法を再確認する
     def validation_epoch_end(self, outputs):
-        outputs_, y_ = [], []
+        clipwise_output, y = [], []
+        loss = 0.
         for output in outputs:
-            outputs_.append(output['output'])
-            y_.append(output['y'])
-        outputs_ = torch.cat(outputs_)
-        y_ = torch.cat(y_)
-        loss = self.loss_function(outputs_, y_)
-        outputs_, y_ = outputs_['clipwise_output'].numpy(), y_.numpy()
-        F1score = f1score(outputs_, y_)
-        mAPscore = average_precision_score(outputs_, y_)
+            loss += self.loss_function(output['output'], output['y']).item()
+            clipwise_output.append(output['clipwise_output'])
+            y.append(output['clipwise_output'])
+        clipwise_output, y = np.array(clipwise_output), np.array(y)
+        F1score = f1score(clipwise_output, y)
+        mAPscore = average_precision_score(clipwise_output, y)
         mAPscore = np.nan_to_num(mAPscore).mean()
         self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_f1', F1score, on_epoch=True, prog_bar=True, logger=True)
