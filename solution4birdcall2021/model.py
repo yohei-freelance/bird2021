@@ -129,7 +129,7 @@ class TimmSEDfromImage(nn.Module):
         init_bn(self.bn0)
 
     def forward(self, input):
-        x = x.transpose(2, 3)
+        x = input.transpose(2, 3)
         # (batch_size, 1, time_steps, mel_bins)
 
         frames_num = x.shape[2]
