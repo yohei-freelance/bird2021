@@ -75,11 +75,15 @@ class LitBirdcall2021(LightningModule):
         preds = self.model(signal)
         loss = self.loss_function(preds, targets)
         outputs_, y_ = preds['clipwise_output'].cpu().detach().numpy(), targets.cpu().detach().numpy()
+        F1score_3 = f1_score(y_, outputs_ > 0.3, average='samples')
         F1score_5 = f1_score(y_, outputs_ > 0.5, average='samples')
+        F1score_7 = f1_score(y_, outputs_ > 0.7, average='samples')
         mAPscore = average_precision_score(y_, outputs_, average=None)
         mAPscore = np.nan_to_num(mAPscore).mean()
         self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_f1_0.3_step', F1score_3, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_f1_0.5_step', F1score_5, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_f1_0.7_step', F1score_7, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_mAP_step', mAPscore, on_epoch=True, prog_bar=True, logger=True)
         return loss
     
@@ -97,11 +101,15 @@ class LitBirdcall2021(LightningModule):
             clipwise_output.append(output['output']['clipwise_output'].cpu().detach().numpy())
             y.append(output['y'].cpu().detach().numpy())
         clipwise_output, y = np.array(clipwise_output).reshape(-1, self.num_classes), np.array(y).reshape(-1, self.num_classes)
-        F1score = f1_score(y, clipwise_output > 0.5, average='samples')
+        F1score_3 = f1_score(y, clipwise_output > 0.3, average='samples')
+        F1score_5 = f1_score(y, clipwise_output > 0.5, average='samples')
+        F1score_7 = f1_score(y, clipwise_output > 0.7, average='samples')
         mAPscore = average_precision_score(y, clipwise_output, average=None)
         mAPscore = np.nan_to_num(mAPscore).mean()
         self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_f1', F1score, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_f1_0.3', F1score_3, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_f1_0.5', F1score_5, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_f1_0.7', F1score_7, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_mAP', mAPscore, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
