@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, average_precision_score
@@ -41,7 +42,8 @@ class LitBirdcall2021(LightningModule):
         # input: [batch_size, time]
         # output: {framewise_output, segmentwise_output, logit, framewise_logit, clipwise_output}
         # 一時的にmodelのoutputのclassを2にする!
-        self.model = TimmSED(base_model_name='tf_efficientnet_b0_ns', pretrained=True, num_classes=2, in_channels=1)
+        self.num_classes = 2
+        self.model = TimmSED(base_model_name='tf_efficientnet_b0_ns', pretrained=True, num_classes=self.num_classes, in_channels=1)
         self.loss_func = BCEFocal2WayLoss()
 
         self.trainset = SpectrogramDataset(file_list=train_file_list)
@@ -72,12 +74,12 @@ class LitBirdcall2021(LightningModule):
         signal, targets = batch
         preds = self.model(signal)
         loss = self.loss_function(preds, targets)
-        outputs_, y_ = preds['clipwise_output'].numpy(), targets.numpy()
-        F1score = f1score(outputs_, y_)
-        mAPscore = average_precision_score(outputs_, y_)
+        outputs_, y_ = preds['clipwise_output'].cpu().detach().numpy(), targets.cpu().detach().numpy()
+        F1score_5 = f1_score(y_, outputs_ > 0.5, average='samples')
+        mAPscore = average_precision_score(y_, outputs_, average=None)
         mAPscore = np.nan_to_num(mAPscore).mean()
         self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_f1_step', F1score, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_f1_0.5_step', F1score_5, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_mAP_step', mAPscore, on_epoch=True, prog_bar=True, logger=True)
         return loss
     
@@ -92,11 +94,11 @@ class LitBirdcall2021(LightningModule):
         loss = 0.
         for output in outputs:
             loss += self.loss_function(output['output'], output['y']).item()
-            clipwise_output.append(output['clipwise_output'])
-            y.append(output['clipwise_output'])
-        clipwise_output, y = np.array(clipwise_output), np.array(y)
-        F1score = f1score(clipwise_output, y)
-        mAPscore = average_precision_score(clipwise_output, y)
+            clipwise_output.append(output['output']['clipwise_output'].cpu().detach().numpy())
+            y.append(output['y'].cpu().detach().numpy())
+        clipwise_output, y = np.array(clipwise_output).reshape(-1, self.num_classes), np.array(y).reshape(-1, self.num_classes)
+        F1score = f1_score(y, clipwise_output > 0.5, average='samples')
+        mAPscore = average_precision_score(y, clipwise_output, average=None)
         mAPscore = np.nan_to_num(mAPscore).mean()
         self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_f1', F1score, on_epoch=True, prog_bar=True, logger=True)
@@ -106,7 +108,7 @@ class LitBirdcall2021(LightningModule):
 if __name__ == '__main__':
     seed_everything(42, workers=True)
     model = LitBirdcall2021()
-    checkpoint_cb = ModelCheckpoint(dirpath='./reports/', filename=f'epoch-{epoch}--val_loss-{val_loss}--val_f1-{val_f1}', save_weights_only=True, monitor="val_loss", mode="min", save_last=True)
+    checkpoint_cb = ModelCheckpoint(dirpath='./reports/', filename='model_weight', save_weights_only=True, monitor="val_loss", mode="min", save_last=True)
     earlystop_cb = EarlyStopping(monitor="val_loss", mode="min")
     trainer = Trainer(gpus=1, max_epochs=1, deterministic=True, callbacks=[checkpoint_cb, earlystop_cb])
     trainer.fit(model)
