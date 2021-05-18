@@ -24,7 +24,7 @@ class BCEFocalLoss(nn.Module):
 
 # 音データ全体によるlogitと, frameごとに切れたlogitの両方を用いてlossを計算する
 class BCEFocal2WayLoss(nn.Module):
-    def __init__(self, weights=[1,1], class_weights=None):
+    def __init__(self, weights=[1, 0.5], class_weights=None):
         super().__init__()
         
         self.focal = BCEFocalLoss()

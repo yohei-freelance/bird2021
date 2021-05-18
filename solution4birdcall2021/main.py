@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, average_precision_score
+# from audiomentations import Compose, AddGausianNoise, PitchShift, 
 import warnings
 
 import torch
@@ -10,6 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.core.lightning import LightningModule
 from dataset import SpectrogramDataset
+from dataset_np import SpectrogramDataset
 from model import TimmSED
 from loss import BCEFocal2WayLoss
 
@@ -19,9 +21,11 @@ train_meta_path = '/home/yohei.nomoto/bird2021/solution4birdcall2021/data/small/
 train_meta = pd.read_csv(train_meta_path)
 
 # define just 2 species
-train_meta = train_meta.query('primary_label in ["acafly", "acowoo"]')
-# BIRD_CODE = {bird_name: i for i, bird_name in enumerate(target_columns)}
-BIRD_CODE = {'acafly': 0, 'acowoo': 1}
+# train_meta = train_meta.query('primary_label in ["acafly", "acowoo"]')
+
+BIRD_NAME = pd.read_csv('birdname.csv').columns.values
+BIRD_CODE = {bird_name: i for i, bird_name in enumerate(BIRD_NAME)}
+# BIRD_CODE = {'acafly': 0, 'acowoo': 1}
 
 # validation
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
@@ -42,7 +46,7 @@ class LitBirdcall2021(LightningModule):
         # input: [batch_size, time]
         # output: {framewise_output, segmentwise_output, logit, framewise_logit, clipwise_output}
         # 一時的にmodelのoutputのclassを2にする!
-        self.num_classes = 2
+        self.num_classes = len(BIRD_NAME)
         self.model = TimmSED(base_model_name='tf_efficientnet_b0_ns', pretrained=True, num_classes=self.num_classes, in_channels=1)
         self.loss_func = BCEFocal2WayLoss()
 
@@ -54,11 +58,11 @@ class LitBirdcall2021(LightningModule):
         return output
 
     def train_dataloader(self):
-        train_dl = DataLoader(self.trainset, batch_size=5, shuffle=True, num_workers=2)
+        train_dl = DataLoader(self.trainset, batch_size=32, shuffle=True, num_workers=4)
         return train_dl
 
     def val_dataloader(self):
-        val_dl = DataLoader(self.valset, batch_size=5, num_workers=2)
+        val_dl = DataLoader(self.valset, batch_size=64, num_workers=4)
         return val_dl
     
     def loss_function(self, preds, labels):

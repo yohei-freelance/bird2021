@@ -8,7 +8,7 @@ import soundfile as sf
 import cv2
 
 BASE_DIR = Path('/home/yohei.nomoto/bird2021/solution4birdcall2021')
-SMALLDATA_DIR = BASE_DIR / 'data' / 'raw'
+SMALLDATA_DIR = BASE_DIR / 'data' / 'processed'
 TRAINDATA_DIR = SMALLDATA_DIR / 'train_short_audio'
 LOG_DIR = BASE_DIR / 'reports' / 'logs'
 OUTPUT_DIR = BASE_DIR / 'models' / 'output'

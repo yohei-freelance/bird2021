@@ -36,6 +36,7 @@ if __name__ == '__main__':
     train_meta = pd.read_csv(train_meta_path)
 
     # !ここではテスト用として2種類の鳥のみ扱う!
+
     train_meta = train_meta.query('primary_label in ["acafly", "acowoo"]')
     BIRD_CODE = {bird_name: i for i, bird_name in enumerate(target_columns)}
     INV_BIRD_CODE = {v: k for k, v in BIRD_CODE.items()}
