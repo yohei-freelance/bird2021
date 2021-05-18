@@ -12,8 +12,8 @@ DATA_DIR = BASE_DIR / 'data'
 RAWDATA_DIR = DATA_DIR / 'raw'
 NPYDATA_DIR = DATA_DIR / 'processed'
 # TRAIN_xst_DATA_DIR下には, BIRDNAME / each_file.ogg (or ogg.npy)
-TRAIN_1st_DATA_DIR = RAWDATA_DIR / 'train_short_audio'
-TRAIN_2nd_DATA_DIR = NPYDATA_DIR / 'audio_images'
+TRAIN_1st_DATA_DIR = NPYDATA_DIR / 'audio_images'
+TRAIN_2nd_DATA_DIR = RAWDATA_DIR / 'train_short_audio'
 
 BIRD_NAME = pd.read_csv('birdname.csv').columns.values
 BIRD_CODE = {bird_name: i for i, bird_name in enumerate(BIRD_NAME)}
