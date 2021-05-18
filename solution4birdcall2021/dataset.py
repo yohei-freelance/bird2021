@@ -8,15 +8,18 @@ import soundfile as sf
 import cv2
 
 BASE_DIR = Path('/home/yohei.nomoto/bird2021/solution4birdcall2021')
-SMALLDATA_DIR = BASE_DIR / 'data' / 'raw'
-TRAINDATA_DIR = SMALLDATA_DIR / 'train_short_audio'
-LOG_DIR = BASE_DIR / 'reports' / 'logs'
-OUTPUT_DIR = BASE_DIR / 'models' / 'output'
+DATA_DIR = BASE_DIR / 'data'
+RAWDATA_DIR = DATA_DIR / 'raw'
+NPYDATA_DIR = DATA_DIR / 'processed'
+# TRAIN_xst_DATA_DIR下には, BIRDNAME / each_file.ogg (or ogg.npy)
+TRAIN_1st_DATA_DIR = RAWDATA_DIR / 'train_short_audio'
+TRAIN_2nd_DATA_DIR = NPYDATA_DIR / 'audio_images'
 
 BIRD_NAME = pd.read_csv('birdname.csv').columns.values
 BIRD_CODE = {bird_name: i for i, bird_name in enumerate(BIRD_NAME)}
 
-class SpectrogramDataset(torch.utils.data.Dataset):
+class SpectrogramDataset2ndStage(torch.utils.data.Dataset):
+    
     def __init__(
         self,
         file_list: [[str, str]],
@@ -29,10 +32,11 @@ class SpectrogramDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int):
         ebird_name, ogg_file_name = self.file_list[idx]
-        ogg_path = TRAINDATA_DIR / ebird_name / ogg_file_name
+        ogg_path = TRAIN_2nd_DATA_DIR / ebird_name / ogg_file_name
         ebird_code = BIRD_CODE[ebird_name]
         y, sr = sf.read(ogg_path)
         
+        # randomly crop 5sec chunk and make prediction
         PERIOD = 5
 
         if self.waveform_transforms:
@@ -54,6 +58,31 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         y = np.nan_to_num(y)
 
         labels = np.zeros(len(BIRD_CODE), dtype=float)
-        labels[BIRD_CODE[ebird_name]] = 1.
+        labels[ebird_code] = 1.
 
         return y, labels
+
+
+class SpectrogramDataset1stStage(SpectrogramDataset2ndStage):
+
+    @staticmethod
+    def normalize(image):
+        image = image.astype("float32", copy=False) / 255.0
+        return np.expand_dims(image, 0)
+
+    def __getitem__(self, idx: int):
+        ebird_name, ogg_file_name = self.file_list[idx]
+        ogg_file_name += '.npy'
+        
+        # utilizing data from https://www.kaggle.com/kneroma/kkiller-birdclef-2021
+        ogg_path = TRAIN_1st_DATA_DIR / ebird_name / ogg_file_name
+        ebird_code = BIRD_CODE[ebird_name]
+        mel_images = np.load(ogg_path)
+        mel_image = mel_images[np.random.choice(len(mel_image))]
+        mel_image = self.normalize(mel_image)
+
+        labels = np.zeros(len(BIRD_CODE), dtype=float)
+        labels[ebird_code] = 1.
+
+        # mel_image: [1, freq_dim, time_dim]
+        return mel_image, labels

@@ -96,22 +96,20 @@ class AttBlockV2(nn.Module):
         return x, norm_att, cla
 
 # sound event detection module
-class TimmSED(nn.Module):
+# numpy based input or not
+class TimmSEDfromImage(nn.Module):
 
-    def __init__(self, base_model_name: str, pretrained=False, num_classes=24, in_channels=1):
+    # base_model_name: you can select arbitary model from https://github.com/rwightman/pytorch-image-models/tree/master/timm/models
+
+    def __init__(self, base_model_name: str, pretrained=False, num_classes: int, in_channels=1):
         super().__init__()
 
-        # ここは天下り的にやってみる.
-
-        # spectrogram extractor
-        self.spectrogram_extractor = Spectrogram(n_fft=2048, hop_length=512, win_length=2048, window="hann", center=True, pad_mode="reflect", freeze_parameters=True)
-        # logmel feature extractor
-        self.logmel_extractor = LogmelFilterBank(sr=32000, n_fft=2048, n_mels=128, fmin=20, fmax=16000, ref=1.0, amin=1e-10, top_db=None, freeze_parameters=True)
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, freq_drop_width=8, freq_stripes_num=2)
         self.bn0 = nn.BatchNorm2d(128)
 
         # main module
-        base_model = timm.create_model('tf_efficientnet_b0_ns', pretrained=True, in_chans=1)
+        self.base_model_name = base_model_name
+        base_model = timm.create_model(self.base_model_name, pretrained=True, in_chans=1)
         layers = list(base_model.children())[:-2]
         self.encoder = nn.Sequential(*layers)
         
@@ -129,6 +127,81 @@ class TimmSED(nn.Module):
     def init_weight(self):
         init_layer(self.fc1)
         init_bn(self.bn0)
+
+    def forward(self, input):
+        x = x.transpose(2, 3)
+        # (batch_size, 1, time_steps, mel_bins)
+
+        frames_num = x.shape[2]
+        
+        # mel_binsについてバッチ毎に正則化
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+
+        # augmentation
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        x = x.transpose(2, 3)
+        # (batch_size, 1, mel_bins(normalized), time_steps)
+        x = self.encoder(x)
+        # (batch_size, channels, freq, frames)
+        x = torch.mean(x, dim=2)
+        # (batch_size, channels, frames)
+
+        # channel smoothing
+        x1 = F.max_pool1d(x, kernel_size=3, stride=1, padding=1)
+        x2 = F.avg_pool1d(x, kernel_size=3, stride=1, padding=1)
+        x = x1 + x2
+
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = x.transpose(1, 2)
+        # (batch_size, frames, channels)
+        # ちょっとここが良く分からないかも
+        x = F.relu_(self.fc1(x))
+        x = x.transpose(1, 2)
+        # (batch_size, channels, frames)
+        x = F.dropout(x, p=0.5, training=self.training)
+        (clipwise_output, norm_att, segmentwise_output) = self.att_block(x)
+        # clipwise_output: (batch_size, class_num)
+        # norm_att: (batch_size, class_num, frames), frames方向は正規化済
+        # segmentwise_output: (batch_size, class_num, frames)
+
+        logit = torch.sum(norm_att * self.att_block.cla(x), dim=2)
+        # logit: (batch_size, class_num)
+        segmentwise_logit = self.att_block.cla(x).transpose(1, 2)
+        # segmentwise_logit: (batch_size, frames, class_num)
+        segmentwise_output = segmentwise_output.transpose(1, 2)
+        # segmentwise_output: (batch_size, frames, class_num)
+
+        interpolate_ratio = frames_num // segmentwise_output.size(1)
+        framewise_output = interpolate(segmentwise_output, interpolate_ratio)
+        framewise_output = pad_framewise_output(framewise_output, frames_num)
+        framewise_logit = interpolate(segmentwise_logit, interpolate_ratio)
+        framewise_logit = pad_framewise_output(framewise_logit, frames_num)
+
+        output_dict = {
+            "framewise_output": framewise_output,
+            "segmentwise_output": segmentwise_output,
+            "logit": logit,
+            "framewise_logit": framewise_logit,
+            "clipwise_output": clipwise_output
+        }
+
+        return output_dict
+
+
+class TimmSEDfromSound(TimmSEDfromImage):
+    # base_model_name: you can select arbitary model from https://github.com/rwightman/pytorch-image-models/tree/master/timm/models
+
+    def __init__(self, base_model_name: str, pretrained=False, num_classes: int, in_channels=1):
+        super().__init__(base_model_name=base_model_name, pretrained=pretrained, num_classes=num_classes, in_channels=in_channels)
+
+        # spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=2048, hop_length=512, win_length=2048, window="hann", center=True, pad_mode="reflect", freeze_parameters=True)
+        # logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=32000, n_fft=2048, n_mels=128, fmin=20, fmax=16000, ref=1.0, amin=1e-10, top_db=None, freeze_parameters=True)
 
     def forward(self, input):
         # (batch_size, data_length)
