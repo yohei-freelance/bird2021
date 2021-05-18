@@ -78,7 +78,7 @@ class SpectrogramDataset1stStage(SpectrogramDataset2ndStage):
         ogg_path = TRAIN_1st_DATA_DIR / ebird_name / ogg_file_name
         ebird_code = BIRD_CODE[ebird_name]
         mel_images = np.load(ogg_path)
-        mel_image = mel_images[np.random.choice(len(mel_image))]
+        mel_image = mel_images[np.random.choice(len(mel_images))]
         mel_image = self.normalize(mel_image)
 
         labels = np.zeros(len(BIRD_CODE), dtype=float)
