@@ -57,11 +57,11 @@ class LitBirdcall2021(LightningModule):
         return output
 
     def train_dataloader(self):
-        train_dl = DataLoader(self.trainset, batch_size=128, shuffle=True, num_workers=4)
+        train_dl = DataLoader(self.trainset, batch_size=32, shuffle=True, num_workers=4)
         return train_dl
 
     def val_dataloader(self):
-        val_dl = DataLoader(self.valset, batch_size=128, num_workers=4)
+        val_dl = DataLoader(self.valset, batch_size=32, num_workers=4)
         return val_dl
     
     def loss_function(self, preds, labels):
@@ -119,7 +119,9 @@ class LitBirdcall2021(LightningModule):
 if __name__ == '__main__':
     seed_everything(42, workers=True)
     model = LitBirdcall2021()
-    checkpoint_cb = ModelCheckpoint(dirpath='./reports/', filename='model_weight', save_weights_only=True, monitor="val_loss", mode="min", save_last=True)
+    checkpoint_cb = ModelCheckpoint(dirpath='./reports/', filename='first-stage--{epoch:02d}-{val_loss:.2f}', save_weights_only=True, monitor="val_loss", mode="min", save_last=True)
     earlystop_cb = EarlyStopping(monitor="val_loss", mode="min")
-    trainer = Trainer(gpus=1, max_epochs=2, deterministic=True, callbacks=[checkpoint_cb, earlystop_cb])
+    trainer = Trainer(gpus=1, max_epochs=30, deterministic=True, callbacks=[checkpoint_cb, earlystop_cb])
     trainer.fit(model)
+    trainer.save_checkpoint("final_model.ckpt")
+    print(checkpoint_cb.best_model_path)
