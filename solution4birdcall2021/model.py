@@ -101,7 +101,7 @@ class TimmSEDfromImage(nn.Module):
 
     # base_model_name: you can select arbitary model from https://github.com/rwightman/pytorch-image-models/tree/master/timm/models
 
-    def __init__(self, base_model_name: str, pretrained=False, num_classes: int, in_channels=1):
+    def __init__(self, base_model_name: str, num_classes: int, pretrained=False, in_channels=1):
         super().__init__()
 
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, freq_drop_width=8, freq_stripes_num=2)
